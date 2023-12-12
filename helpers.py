@@ -7,6 +7,69 @@ import numpy as np
 
 from htautau import HTauTauRegression
 
+btag_wps = {
+    "2016APV": {
+        "loose": 0.0508,
+        "medium": 0.2598,
+    },
+    "2016": {
+        "loose": 0.0480,
+        "medium": 0.2489,
+    },
+    "2017": {
+        "loose": 0.0532,
+        "medium": 0.3040,
+    },
+    "2018": {
+        "loose": 0.0490,
+        "medium": 0.2783,
+    },
+}
+
+
+def sel_iso_first_lep(array: ak.Array) -> ak.Array:
+    return (
+        ((array.pairType == 0) & (array.dau1_iso < 0.15)) |
+        ((array.pairType == 1) & (array.dau1_eleMVAiso == 1)) |
+        ((array.pairType == 2) & (array.dau1_deepTauVsJet >= 5))
+    )
+
+
+def sel_baseline(array: ak.Array) -> ak.Array:
+    return (
+        (array.isLeptrigger == 1) &
+        # including cut on first isolated lepton to reduce memory footprint
+        # (note that this is not called "baseline" anymore by KLUB standards)
+        # ((array.pairType == 0) | (array.pairType == 1) | (array.pairType == 2)) &
+        sel_iso_first_lep(array) &
+        (array.nleps == 0) &
+        (array.nbjetscand > 1)
+    )
+
+def sel_btag_m_first(array: ak.Array, year: str) -> ak.Array:
+    return (
+    )
+
+def sel_vbf(array: ak.Array) -> ak.Array:
+    return (
+    )
+
+def sel_boosted(array: ak.Array) -> ak.Array:
+    return array.isBoosted == 1 
+
+def sel_mass_window_resolved(array: ak.Array) -> ak.Array:
+    return (
+        ((array.tauH_SVFIT_mass - 129.0) / 53.0)**2.0 +
+        ((array.bH_mass_raw - 169.0) / 145.0)**2.0
+    ) < 1.0
+
+
+def sel_mass_window_boosted(array: ak.Array) -> ak.Array:
+    return (
+        ((array.tauH_SVFIT_mass - 128.0) / 60.0)**2.0 +
+        ((array.bH_mass_raw - 159.0) / 94.0)**2.0
+    ) < 1.0
+
 # https://github.com/GilesStrong/cms_hh_proc_interface/blob/master/processing/interface/feat_comp.hh lines 36-38
 deep_bjet_wps = {2016: [0,0.0614,0.3093,0.7221],
                  2017: [0,0.0521,0.3033,0.7489],
@@ -71,21 +134,28 @@ def run_htautau(events: ak.Array, cont_htt_inputs: List, cat_htt_inputs: List):
     return events
 
 
-def get_num_btag(events: ak.Array) -> ak.Array:
-    num_btag_Loose_1 = np.logical_or((events.bjet1_bID_deepFlavor > 0.049),(events.bjet2_bID_deepFlavor > 0.049))
-    num_btag_Loose_2 = (events.bjet1_bID_deepFlavor > 0.049) &  (events.bjet2_bID_deepFlavor > 0.049)
-    num_btag_Medium_1 = np.logical_or((events.bjet1_bID_deepFlavor > 0.2783),(events.bjet2_bID_deepFlavor > 0.2783))
-    num_btag_Medium_2 = (events.bjet1_bID_deepFlavor > 0.2783) &  (events.bjet2_bID_deepFlavor > 0.2783)
-    # create new col and convert mask to int
-    events['num_btag_Loose'] = num_btag_Loose_1*1
+def get_num_btag(array: ak.Array, year: str) -> ak.Array:
+    sel_btag_l = (((array.bjet1_bID_deepFlavor > btag_wps[year]["loose"]) & 
+                   (array.bjet2_bID_deepFlavor < btag_wps[year]["loose"])) |
+                   ((array.bjet1_bID_deepFlavor < btag_wps[year]["loose"])) &
+                   (array.bjet2_bID_deepFlavor > btag_wps[year]["loose"]))
+    sel_btag_ll = ((array.bjet1_bID_deepFlavor > btag_wps[year]["loose"]) &
+                  (array.bjet2_bID_deepFlavor > btag_wps[year]["loose"]))
+    sel_btag_m = (((array.bjet1_bID_deepFlavor > btag_wps[year]["medium"]) &
+                   (array.bjet2_bID_deepFlavor < btag_wps[year]["medium"])) |
+                   ((array.bjet1_bID_deepFlavor < btag_wps[year]["medium"]) &
+                   (array.bjet2_bID_deepFlavor > btag_wps[year]["medium"])))
+    sel_btag_mm = ((array.bjet1_bID_deepFlavor > btag_wps[year]["medium"]) &
+                  (array.bjet2_bID_deepFlavor > btag_wps[year]["medium"]))
+    array['num_btag_Loose'] = sel_btag_l*1
     # get np values as a view of the ak col
-    num_btag_Loose = np.asarray(ak.flatten(events.num_btag_Loose, axis=0))
-    num_btag_Loose[num_btag_Loose_2] = 2*np.ones(len(num_btag_Loose_2[num_btag_Loose_2==True])) 
+    num_btag_Loose = np.asarray(ak.flatten(array.num_btag_Loose, axis=0))
+    num_btag_Loose[sel_btag_ll] = 2*np.ones(ak.sum(sel_btag_ll)) 
     # same for medium
-    events['num_btag_Medium'] = num_btag_Medium_1*1
-    num_btag_Medium = np.asarray(ak.flatten(events.num_btag_Medium, axis=0))
-    num_btag_Medium[num_btag_Medium_2] = 2*np.ones(len(num_btag_Medium_2[num_btag_Medium_2==True])) 
-    return events
+    array['num_btag_Medium'] = sel_btag_m*1
+    num_btag_Medium = np.asarray(ak.flatten(array.num_btag_Medium, axis=0))
+    num_btag_Medium[sel_btag_mm] = 2*np.ones(ak.sum(sel_btag_mm)) 
+    return array
 
 
 def get_vbf_pair(events: ak.Array) -> ak.Array:
@@ -98,20 +168,28 @@ def get_vbf_pair(events: ak.Array) -> ak.Array:
     return events
 
 
-def jet_cat_lookup(events: ak.Array) -> ak.Array:
-    vbf_mask = (( events.has_vbf_pair ) & ( events.num_btag_Loose >= 1 )) # 2j1b+_VBFL, 2j1b+_VBF, 2j1b+_VBFT
-    # isBoosted is an int
-    no_vbf_2j2bL = (( ~events.has_vbf_pair ) & ( events.isBoosted ).to_numpy().astype(bool) & ( events.num_btag_Loose >= 2 ))
-    no_vbf_2j2bR = (( ~events.has_vbf_pair ) & ( events.num_btag_Medium >= 2 ))
-    no_vbf_2j1bR = (( ~events.has_vbf_pair ) & ( events.num_btag_Loose >= 1 ))
-    no_vbf_2j0bR = (( ~events.has_vbf_pair ) & ( events.num_btag_Loose == 0 ))
-    events['jet_cat'] = vbf_mask*1
-    jet_cat_np = np.asarray(ak.flatten(events.jet_cat, axis=0))
-    jet_cat_np[no_vbf_2j0bR] = 2*np.ones(len(no_vbf_2j0bR[no_vbf_2j0bR==1]))
-    jet_cat_np[no_vbf_2j1bR] = 3*np.ones(len(no_vbf_2j1bR[no_vbf_2j1bR==1]))
-    jet_cat_np[no_vbf_2j2bR] = 4*np.ones(len(no_vbf_2j2bR[no_vbf_2j2bR==1]))
-    jet_cat_np[no_vbf_2j2bL] = 5*np.ones(len(no_vbf_2j2bL[no_vbf_2j2bL==1]))
-    return events
+def jet_cat_lookup(array: ak.Array, year: str) -> ak.Array:
+    sel_btag_ll = ((array.bjet1_bID_deepFlavor > btag_wps[year]["loose"]) &
+                  (array.bjet2_bID_deepFlavor > btag_wps[year]["loose"]))
+    sel_btag_m = (((array.bjet1_bID_deepFlavor > btag_wps[year]["medium"]) &
+                   (array.bjet2_bID_deepFlavor < btag_wps[year]["medium"])) |
+                   ((array.bjet1_bID_deepFlavor < btag_wps[year]["medium"]) &
+                   (array.bjet2_bID_deepFlavor > btag_wps[year]["medium"])))
+    sel_btag_mm = ((array.bjet1_bID_deepFlavor > btag_wps[year]["medium"]) &
+                  (array.bjet2_bID_deepFlavor > btag_wps[year]["medium"]))
+    sel_btag_m_first = ((array.bjet1_bID_deepFlavor > btag_wps[year]["medium"]) |
+                       (array.bjet2_bID_deepFlavor > btag_wps[year]["medium"]))
+    sel_boosted = (array.isBoosted == 1)
+    cat_vbf = ((array.isVBF == 1) & (array.VBFjj_mass > 500) & (array.VBFjj_deltaEta > 3)) & (sel_btag_m_first)
+    cat_boosted = sel_btag_ll & sel_boosted & sel_btag_ll
+    cat_resolved_1b = sel_btag_m & ~sel_boosted & ~cat_vbf
+    cat_resolved_2b = sel_btag_mm & ~sel_boosted & ~cat_vbf
+    array['jet_cat'] = cat_vbf*1
+    jet_cat_np = np.asarray(ak.flatten(array.jet_cat, axis=0))
+    jet_cat_np[cat_boosted] = 4*np.ones(ak.sum(cat_boosted))
+    jet_cat_np[cat_resolved_1b] = 3*np.ones(ak.sum(cat_resolved_1b))
+    jet_cat_np[cat_resolved_2b] = 2*np.ones(ak.sum(cat_resolved_2b))
+    return array
 
 
 def calc_top_masses(l_1, l_2, b_1, b_2, met):
@@ -168,21 +246,6 @@ def calc_mt(v: vector, met: vector) -> np.array:
     # set non-finite (probably due to kinfit or svift non-convergence) to -1
     mt[~np.isfinite(mt)] = -1*np.ones(np.sum(~np.isfinite(mt)))
     return mt
-
-
-def get_jet_cat(events: ak.Array) -> ak.Array:
-    events['jet_cat'] = np.zeros(len(events))
-    jc_five_mask = (events.is_vbf) & (events.num_btag_loose>=1)
-    jc_four_mask = (~events.is_vbf) & (events.boosted) & (events.num_btag_loose>=2)
-    jc_three_mask = (~events.is_vbf) & (events.num_btag_medium>=2)
-    jc_two_mask = (~events.is_vbf) & (events.num_btag_loose>=1)
-    jc_one_mask = (~events.is_vbf) & (events.num_btag_loose==0)
-    events[jc_one_mask, 'jet_cat'] = 1*np.ones(np.sum(jc_one_mask))
-    events[jc_two_mask, 'jet_cat'] = 2*np.ones(np.sum(jc_two_mask))
-    events[jc_three_mask, 'jet_cat'] = 3*np.ones(np.sum(jc_three_mask))
-    events[jc_four_mask, 'jet_cat'] = 4*np.ones(np.sum(jc_four_mask))
-    events[jc_five_mask, 'jet_cat'] = 5*np.ones(np.sum(jc_five_mask))
-    return events
 
 
 def get_region(events: ak.Array) -> ak.Array:
