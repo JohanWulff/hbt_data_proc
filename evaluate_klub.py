@@ -29,7 +29,7 @@ masses = [
     700, 750, 800, 850, 900, 1000, 1250, 1500, 1750, 2000, 2500, 3000,
 ]
 
-id2spin = {0:'radion', 2:'graviton'}
+id2spin = {0:'radion', 1:'graviton'}
 spin2id = {id2spin[i]:i for i in id2spin}
 klub_index_cols = ["EventNumber", "RunNumber", "lumi"]
 klub_cut_cols = ['isLeptrigger', "pairType", 'nleps', 'nbjetscand'] 
