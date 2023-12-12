@@ -43,7 +43,7 @@ error                   = singularity.$(ClusterId).$(ProcId).err\n\
 output                  = singularity.$(ClusterId).$(ProcId).out\n\
 \n\
 should_transfer_files = YES\n\
-MY.JobFlavour = \"espresso\"\n\
+MY.JobFlavour = \"microcentury\"\n\
 output_destination      = root://eosuser.cern.ch//{outdir}\n\
 MY.XRDCP_CREATE_DIR     = True\n\
 MY.SingularityImage     = \"/cvmfs/unpacked.cern.ch/registry.hub.docker.com/jwulff/lumin_3.8:latest\"\n\
