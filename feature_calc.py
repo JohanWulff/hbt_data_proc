@@ -13,8 +13,6 @@ masses = [
     700, 750, 800, 850, 900, 1000, 1250, 1500, 1750, 2000, 2500, 3000,
 ]
 
-spins = [0, 2]
-
 cont_htt_inputs= ["met_px", "met_py", 
                   "DeepMET_ResponseTune_px", "DeepMET_ResponseTune_py", "DeepMET_ResolutionTune_px", "DeepMET_ResolutionTune_py",
                   "dphi_l1_l2", "deta_l1_l2",
@@ -50,8 +48,8 @@ def calc_feats(events: ak.Array, sample_id: int, sum_w: float, mass: int, spin: 
         events['weight'] = prod
 
     events = get_vbf_pair(events=events)
-    events = get_num_btag(events=events)
-    events = jet_cat_lookup(events=events)
+    events = get_num_btag(array=events, year=year)
+    events = jet_cat_lookup(array=events, year=year)
     events = get_region(events=events)
     events['split'] = np.zeros(len(events)) 
     np_split = np.asarray(ak.flatten(events.split, axis=0))
@@ -77,7 +75,8 @@ def calc_feats(events: ak.Array, sample_id: int, sum_w: float, mass: int, spin: 
         events['res_mass'] = mass*np.ones(len(events))
         events['gen_target'] = np.ones(len(events))
     if int(spin) == -1:
-        events['spin'] = np.random.choice(spins, size=len(events))
+        print(list(spin2id.values()))
+        events['spin'] = np.random.choice(list(spin2id.values()), size=len(events))
     else:
         events['spin'] = spin*np.ones(len(events))
 
